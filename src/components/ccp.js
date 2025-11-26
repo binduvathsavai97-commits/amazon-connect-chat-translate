@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { Grid } from 'semantic-ui-react';
-import  { Amplify }  from 'aws-amplify';
+import { Amplify } from 'aws-amplify';
 import awsconfig from '../aws-exports';
 import Chatroom from './chatroom';
 import translateText from './translate'
@@ -35,8 +35,8 @@ const Ccp = () => {
                         messageData.data.Content)
                 }
                 else {
-                    console.log(`CDEBUG ===> Customer ${messageData.data.DisplayName} Says`,messageData.data.Content);
-                    processChatText(messageData.data.Content, messageData.data.Type, messageData.data.ContactId );
+                    console.log(`CDEBUG ===> Customer ${messageData.data.DisplayName} Says`, messageData.data.Content);
+                    processChatText(messageData.data.Content, messageData.data.Type, messageData.data.ContactId);
                 }
             })
         })
@@ -48,28 +48,28 @@ const Ccp = () => {
         // Check if we know the language for this contactId, if not use dectectText(). This process means we only perform comprehend language detection at most once.
         console.log(type);
         let textLang = '';
-          for(var i = 0; i < languageTranslate.length; i++) {
-                if (languageTranslate[i].contactId === contactId) {
-                    textLang = languageTranslate[i].lang
-                     break
-                } 
+        for (var i = 0; i < languageTranslate.length; i++) {
+            if (languageTranslate[i].contactId === contactId) {
+                textLang = languageTranslate[i].lang
+                break
+            }
         }
         // If the contatId was not found in the store, or the store is empty, perform dectText API to comprehend
-        if (localLanguageTranslate.length === 0 || textLang === ''){
+        if (localLanguageTranslate.length === 0 || textLang === '') {
             let tempLang = await detectText(content);
             textLang = tempLang.textInterpretation.language
         }
 
 
-         // Update (or Add if new contactId) the store with the the language code
-         function upsert(array, item) { // (1)
+        // Update (or Add if new contactId) the store with the the language code
+        function upsert(array, item) { // (1)
             const i = array.findIndex(_item => _item.contactId === item.contactId);
             if (i > -1) array[i] = item; // (2)
             else array.push(item);
-          }
-        upsert(languageTranslate, {contactId: contactId, lang: textLang})
+        }
+        upsert(languageTranslate, { contactId: contactId, lang: textLang })
         setLanguageTranslate(languageTranslate);
-                
+
         // Translate the customer message into English.
         let translatedMessage = await translateText(content, textLang, 'en');
         console.log(`CDEBUG ===>  Original Message: ` + content + `\n Translated Message: ` + translatedMessage);
@@ -88,11 +88,11 @@ const Ccp = () => {
     // Subscribing to CCP events. See : https://github.com/aws/amazon-connect-streams/blob/master/Documentation.md
     // *******
     function subscribeConnectEvents() {
-        window.connect.core.onViewContact(function(event) {
+        window.connect.core.onViewContact(function (event) {
             var contactId = event.contactId;
             console.log("CDEBUG ===> onViewContact", contactId)
-            setCurrentContactId(contactId);    
-          });
+            setCurrentContactId(contactId);
+        });
 
         console.log("CDEBUG ===> subscribeConnectEvents");
 
@@ -111,30 +111,30 @@ const Ccp = () => {
                 });
 
                 // This is invoked when the chat is accepted
-                contact.onAccepted(async() => {
+                contact.onAccepted(async () => {
                     console.log("CDEBUG ===> onAccepted: ", contact);
                     const cnn = contact.getConnections().find(cnn => cnn.getType() === window.connect.ConnectionType.AGENT);
                     const agentChatSession = await cnn.getMediaController();
                     setCurrentContactId(contact.contactId)
                     console.log("CDEBUG ===> agentChatSession ", agentChatSession)
                     // Save the session to props, this is required to send messages within the chatroom.js
-                    setAgentChatSessionState(agentChatSessionState => [...agentChatSessionState, {[contact.contactId] : agentChatSession}])
-                
+                    setAgentChatSessionState(agentChatSessionState => [...agentChatSessionState, { [contact.contactId]: agentChatSession }])
+
                     // Get the language from the attributes, if the value is valid then add to the store
                     localLanguageTranslate = contact.getAttributes().x_lang.value
-                    if (Object.keys(languageOptions).find(key => languageOptions[key] === localLanguageTranslate) !== undefined){
+                    if (Object.keys(languageOptions).find(key => languageOptions[key] === localLanguageTranslate) !== undefined) {
                         console.log("CDEBUG ===> Setting lang code from attribites:", localLanguageTranslate)
-                        languageTranslate.push({contactId: contact.contactId, lang: localLanguageTranslate})
+                        languageTranslate.push({ contactId: contact.contactId, lang: localLanguageTranslate })
                         setLanguageTranslate(languageTranslate);
                         setRefreshChild('updated') // Workaround to force a refresh of the chatroom UI to show the updated language based on contact attribute.
-                
+
                     }
                     console.log("CDEBUG ===> onAccepted, languageTranslate ", languageTranslate)
-                    
+
                 });
 
                 // This is invoked when the customer and agent are connected
-                contact.onConnected(async() => {
+                contact.onConnected(async () => {
                     console.log("CDEBUG ===> onConnected() >> contactId: ", contact.contactId);
                     const cnn = contact.getConnections().find(cnn => cnn.getType() === window.connect.ConnectionType.AGENT);
                     const agentChatSession = await cnn.getMediaController();
@@ -151,7 +151,7 @@ const Ccp = () => {
                     console.log("CDEBUG ===> onEnded() >> contactId: ", contact.contactId);
                     setLang('');
                 });
-                
+
                 // This is invoked when the agent moves out of ACW to a different state
                 contact.onDestroy(() => {
                     console.log("CDEBUG ===> onDestroy() >> contactId: ", contact.contactId);
@@ -180,7 +180,7 @@ const Ccp = () => {
         }
         else {
             console.log("CDEBUG ===> waiting 3s");
-            setTimeout(function() { subscribeConnectEvents(); }, 3000);
+            setTimeout(function () { subscribeConnectEvents(); }, 3000);
         }
     };
 
@@ -189,37 +189,109 @@ const Ccp = () => {
     // Loading CCP
     // *****
     useEffect(() => {
-        const connectUrl = process.env.REACT_APP_CONNECT_INSTANCE_URL ? 
-        process.env.REACT_APP_CONNECT_INSTANCE_URL : "https://connexsalesdemo.my.connect.aws";
+        const connectUrl = process.env.REACT_APP_CONNECT_INSTANCE_URL ?
+            process.env.REACT_APP_CONNECT_INSTANCE_URL : "https://connexsalesdemo.my.connect.aws";
         window.connect.agentApp.initApp(
             "ccp",
             "ccp-container",
-            connectUrl + "/connect/ccp-v2/", { 
-                ccpParams: { 
-                    region: process.env.REACT_APP_CONNECT_REGION,
-                    pageOptions: {                  // optional
-                        enableAudioDeviceSettings: true, // optional, defaults to 'false'
-                        enablePhoneTypeSettings: true // optional, defaults to 'true'
-                      }
-                } 
+            connectUrl + "/connect/ccp-v2/", {
+            ccpParams: {
+                region: process.env.REACT_APP_CONNECT_REGION,
+                pageOptions: {                  // optional
+                    enableAudioDeviceSettings: true, // optional, defaults to 'false'
+                    enablePhoneTypeSettings: true // optional, defaults to 'true'
+                }
             }
+        }
         );
         subscribeConnectEvents();
     }, []);
 
 
+    // return (
+    //     <main>
+    //       <Grid columns='equal' stackable padded>
+    //       <Grid.Row>
+    //         {/* CCP window will load here */}
+    //         <div id="ccp-container"></div>
+    //         {/* Translate window will laod here. We pass the agent state to be able to use this to push messages to CCP */}
+    //         <div id="chatroom" ><Chatroom session={agentChatSessionState}/> </div> 
+    //         </Grid.Row>
+    //       </Grid>
+    //     </main>
+    // );
     return (
         <main>
-          <Grid columns='equal' stackable padded>
-          <Grid.Row>
-            {/* CCP window will load here */}
-            <div id="ccp-container"></div>
-            {/* Translate window will laod here. We pass the agent state to be able to use this to push messages to CCP */}
-            <div id="chatroom" ><Chatroom session={agentChatSessionState}/> </div> 
-            </Grid.Row>
-          </Grid>
+            <Grid columns={3} stackable padded>
+
+                <Grid.Row>
+
+                    {/* LEFT SIDE — CCP + Chatroom */}
+                    <Grid.Column width={8}>
+                        <div id="ccp-container"></div>
+                        <div id="chatroom">
+                            <Chatroom session={agentChatSessionState} />
+                        </div>
+                    </Grid.Column>
+
+                    {/* MIDDLE — CUSTOMER INFO */}
+                    <Grid.Column width={4}>
+                        <div className="customer-info-box">
+                            <h3>Customer Information</h3>
+
+                            <p><strong>Contact ID:</strong> {currentContactId}</p>
+                            <p><strong>Carrier:</strong> T-Mobile</p>
+                            <p><strong>Phone:</strong> +1 (555) 123-4567</p>
+                            <p><strong>Email:</strong> customer@email.com</p>
+
+                            {/* Add any dynamic fields you want */}
+                        </div>
+                    </Grid.Column>
+
+                    {/* RIGHT SIDE — ACTIONS */}
+                    <Grid.Column width={4}>
+                        <div className="right-tools-box">
+
+                            {/* Flag Conversation */}
+                            <div className="flag-section">
+                                <h4>Flag Conversation</h4>
+                                <input
+                                    type="checkbox"
+                                    onChange={(e) => console.log("Flag Conversation:", e.target.checked)}
+                                />
+                            </div>
+
+                            <br />
+
+                            {/* Suspend Customer */}
+                            <div className="suspend-section">
+                                <h4>Suspend Customer</h4>
+
+                                {/* Dropdown version */}
+                                <select onChange={(e) => console.log("Suspend Duration:", e.target.value)}>
+                                    <option value="">Select duration</option>
+                                    <option value="5">5 minutes</option>
+                                    <option value="15">15 minutes</option>
+                                    <option value="30">30 minutes</option>
+                                    <option value="60">1 hour</option>
+                                </select>
+
+                                {/*    OR TimePicker version using Semantic UI    */}
+                                {/* <TimeInput
+                    name="suspendTime"
+                    onChange={(event, data) => console.log("Suspend until:", data.value)}
+                /> */}
+                            </div>
+
+                        </div>
+                    </Grid.Column>
+
+                </Grid.Row>
+
+            </Grid>
         </main>
     );
+
 };
 
 export default Ccp;
