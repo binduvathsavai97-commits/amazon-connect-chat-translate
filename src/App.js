@@ -1,7 +1,7 @@
 import { Amplify }  from '@aws-amplify/core';
-import { withAuthenticator } from '@aws-amplify/ui-react';
+// import { withAuthenticator } from '@aws-amplify/ui-react';
 import '@aws-amplify/ui-react/styles.css';
-import awsconfig from './aws-exports';
+// import awsconfig from './aws-exports';
 import React, { useState, useEffect } from 'react';
 import './App.css';
 import 'semantic-ui-less/semantic.less';
@@ -18,7 +18,7 @@ function App({ signOut, user }) {
   }, []);
 
   const configureAuth = () => {
-    Amplify.configure(awsconfig);
+    // Amplify.configure(awsconfig);
     setIsConfigured(true);
   };
   //const signedIn = async () => {
@@ -32,4 +32,4 @@ function App({ signOut, user }) {
   );
 }
 
-export default withAuthenticator(App);
+export default App;

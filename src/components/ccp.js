@@ -1,13 +1,15 @@
 import React, { useEffect, useState } from 'react';
 import { Grid } from 'semantic-ui-react';
 import { Amplify } from 'aws-amplify';
-import awsconfig from '../aws-exports';
+// import awsconfig from '../aws-exports';
 import Chatroom from './chatroom';
 import translateText from './translate'
 import detectText from './detectText'
+import { relayAgentMessage } from './agentRelayApi';
+
 import { addChat, setLanguageTranslate, clearChat, useGlobalState, setCurrentContactId } from '../store/state';
 
-Amplify.configure(awsconfig);
+// Amplify.configure(awsconfig);
 
 const Ccp = () => {
     const [languageTranslate] = useGlobalState('languageTranslate');
@@ -26,21 +28,51 @@ const Ccp = () => {
     // *******
     // Subscribe to the chat session
     // *******
+    // function getEvents(contact, agentChatSession) {
+    //     console.log(agentChatSession);
+    //     contact.getAgentConnection().getMediaController().then(controller => {
+    //         controller.onMessage(messageData => {
+    //             if (messageData.chatDetails.participantId === messageData.data.ParticipantId) {
+    //                 console.log(`CDEBUG ===> Agent ${messageData.data.DisplayName} Says`,
+    //                     messageData.data.Content)
+    //             }
+    //             else {
+    //                 console.log(`CDEBUG ===> Customer ${messageData.data.DisplayName} Says`, messageData.data.Content);
+    //                 processChatText(messageData.data.Content, messageData.data.Type, messageData.data.ContactId);
+    //             }
+    //         })
+    //     })
+    // }
     function getEvents(contact, agentChatSession) {
-        console.log(agentChatSession);
-        contact.getAgentConnection().getMediaController().then(controller => {
-            controller.onMessage(messageData => {
-                if (messageData.chatDetails.participantId === messageData.data.ParticipantId) {
-                    console.log(`CDEBUG ===> Agent ${messageData.data.DisplayName} Says`,
-                        messageData.data.Content)
-                }
-                else {
-                    console.log(`CDEBUG ===> Customer ${messageData.data.DisplayName} Says`, messageData.data.Content);
-                    processChatText(messageData.data.Content, messageData.data.Type, messageData.data.ContactId);
-                }
-            })
+    console.log(agentChatSession);
+    contact.getAgentConnection().getMediaController().then(controller => {
+        controller.onMessage(messageData => {
+            if (messageData.chatDetails.participantId === messageData.data.ParticipantId) {
+                // ====== AGENT MESSAGE ======
+                console.log(`CDEBUG ===> Agent ${messageData.data.DisplayName} Says`,
+                    messageData.data.Content);
+
+                // 👇 NEW: send agent message to your backend
+                relayAgentMessage({
+                    contactId: messageData.data.ContactId || contact.contactId,
+                    content: messageData.data.Content,
+                    displayName: messageData.data.DisplayName
+                });
+            }
+            else {
+                // ====== CUSTOMER MESSAGE ======
+                console.log(`CDEBUG ===> Customer ${messageData.data.DisplayName} Says`,
+                    messageData.data.Content);
+                processChatText(
+                    messageData.data.Content,
+                    messageData.data.Type,
+                    messageData.data.ContactId
+                );
+            }
         })
-    }
+    })
+}
+
     // *******
     // Processing the incoming chat from the Customer
     // *******
@@ -207,7 +239,6 @@ const Ccp = () => {
         subscribeConnectEvents();
     }, []);
 
-
     // return (
     //     <main>
     //       <Grid columns='equal' stackable padded>
@@ -220,55 +251,72 @@ const Ccp = () => {
     //       </Grid>
     //     </main>
     // );
-    return (
-        <main>
-            <Grid columns={3} stackable padded>
+    
+   return (
+  <main className="ccp-layout">
+    <div className="ccp-shell">
+      <Grid stackable columns={3}>
+        <Grid.Row verticalAlign="top">
 
-                <Grid.Row>
+          {/* LEFT: CCP + Translate (stacked) */}
+          <Grid.Column width={8}>
+            <div className="panel-card panel-ccp">
+              <h3 className="panel-title">Agent CCP</h3>
+              <div id="ccp-container" className="ccp-container" />
+            </div>
 
-                    {/* LEFT SIDE */}
-                    <Grid.Column width={6}>   {/* Reduced from 8 → 6 */}
-                        <div id="ccp-container"></div>
-                        <div id="chatroom">
-                            <Chatroom session={agentChatSessionState} />
-                        </div>
-                    </Grid.Column>
+            <div className="panel-card panel-chat">
+              <h3 className="panel-title">
+                Translate – ({currentContactId ? currentContactId.slice(0, 8) + "…" : "-"})
+              </h3>
+              <div id="chatroom" className="chatroom-wrapper">
+                <Chatroom session={agentChatSessionState} />
+              </div>
+            </div>
+          </Grid.Column>
 
-                    {/* MIDDLE */}
-                    <Grid.Column width={5}>
-                        <div className="customer-info-box">
-                            <h3>Customer Information</h3>
-                            <p><strong>Contact ID:</strong> {currentContactId || 'none'}</p>
-                            <p><strong>Carrier:</strong> T-Mobile</p>
-                            <p><strong>Phone:</strong> +1 (555) 123-4567</p>
-                            <p><strong>Email:</strong> customer@email.com</p>
-                        </div>
-                    </Grid.Column>
+          {/* CENTER: Customer info */}
+          <Grid.Column width={4}>
+            <div className="panel-card panel-info">
+              <h3 className="panel-title">Customer Information</h3>
+              <p><strong>Contact ID:</strong> {currentContactId || "none"}</p>
+              <p><strong>Carrier:</strong> T-Mobile</p>
+              <p><strong>Phone:</strong> +1 (555) 123-4567</p>
+              <p><strong>Email:</strong> customer@email.com</p>
+            </div>
+          </Grid.Column>
 
-                    {/* RIGHT SIDE */}
-                    <Grid.Column width={5}>
-                        <div className="right-tools-box">
-                            <h4>Flag Conversation</h4>
-                            <input type="checkbox" />
+          {/* RIGHT: Actions */}
+          <Grid.Column width={4}>
+            <div className="panel-card panel-tools">
+              <h3 className="panel-title">Conversation Tools</h3>
 
-                            <h4>Suspend Customer</h4>
-                            <select>
-                                <option value="">Select duration</option>
-                                <option value="5">5 minutes</option>
-                                <option value="15">15 minutes</option>
-                                <option value="30">30 minutes</option>
-                                <option value="60">1 hour</option>
-                            </select>
-                        </div>
-                    </Grid.Column>
+              <div className="field-block">
+                <label>
+                  <input type="checkbox" /> Flag conversation
+                </label>
+              </div>
 
-                </Grid.Row>
+              <div className="field-block">
+                <label htmlFor="suspend-select">Suspend customer</label>
+                <select id="suspend-select">
+                  <option value="">Select duration</option>
+                  <option value="5">5 minutes</option>
+                  <option value="15">15 minutes</option>
+                  <option value="30">30 minutes</option>
+                  <option value="60">1 hour</option>
+                </select>
+              </div>
+            </div>
+          </Grid.Column>
 
-            </Grid>
+        </Grid.Row>
+      </Grid>
+    </div>
+  </main>
+);
 
-        </main>
-    );
-
+        
 };
 
 export default Ccp;

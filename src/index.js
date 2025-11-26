@@ -12,8 +12,8 @@ import 'semantic-ui-less/semantic.less';
 
 // Amplify imports for base install
 import { Amplify } from "aws-amplify";
-import awsExports from "./aws-exports";
-Amplify.configure(awsExports);
+// import awsExports from "./aws-exports";
+// Amplify.configure(awsExports);
 // 
 
 
