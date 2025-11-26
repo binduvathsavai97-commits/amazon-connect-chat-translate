@@ -1,13 +1,23 @@
 #ccp-container {
-  height:500px;
-  padding-top: 15px;
-  padding-left: 15px;
-  width: 330px;
+  width: 100%;
+  max-width: 350px; /* keeps CCP in its column */
+  height: 600px;
+  overflow: hidden;
 }
+
 
 .ui.toggle.checkbox input:checked ~ .box:before,
 .ui.toggle.checkbox input:checked ~ .coloring.red:before {
 background: #F25F5C !important;
+}
+
+
+.customer-info-box,
+.right-tools-box {
+  background: #2f3338;
+  padding: 15px;
+  border-radius: 6px;
+  color: white;
 }
 
 

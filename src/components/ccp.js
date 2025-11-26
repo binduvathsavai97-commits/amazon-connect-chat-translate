@@ -226,69 +226,46 @@ const Ccp = () => {
 
                 <Grid.Row>
 
-                    {/* LEFT SIDE — CCP + Chatroom */}
-                    <Grid.Column width={8}>
+                    {/* LEFT SIDE */}
+                    <Grid.Column width={6}>   {/* Reduced from 8 → 6 */}
                         <div id="ccp-container"></div>
                         <div id="chatroom">
                             <Chatroom session={agentChatSessionState} />
                         </div>
                     </Grid.Column>
 
-                    {/* MIDDLE — CUSTOMER INFO */}
-                    <Grid.Column width={4}>
+                    {/* MIDDLE */}
+                    <Grid.Column width={5}>
                         <div className="customer-info-box">
                             <h3>Customer Information</h3>
-
-                            <p><strong>Contact ID:</strong> {currentContactId}</p>
+                            <p><strong>Contact ID:</strong> {currentContactId || 'none'}</p>
                             <p><strong>Carrier:</strong> T-Mobile</p>
                             <p><strong>Phone:</strong> +1 (555) 123-4567</p>
                             <p><strong>Email:</strong> customer@email.com</p>
-
-                            {/* Add any dynamic fields you want */}
                         </div>
                     </Grid.Column>
 
-                    {/* RIGHT SIDE — ACTIONS */}
-                    <Grid.Column width={4}>
+                    {/* RIGHT SIDE */}
+                    <Grid.Column width={5}>
                         <div className="right-tools-box">
+                            <h4>Flag Conversation</h4>
+                            <input type="checkbox" />
 
-                            {/* Flag Conversation */}
-                            <div className="flag-section">
-                                <h4>Flag Conversation</h4>
-                                <input
-                                    type="checkbox"
-                                    onChange={(e) => console.log("Flag Conversation:", e.target.checked)}
-                                />
-                            </div>
-
-                            <br />
-
-                            {/* Suspend Customer */}
-                            <div className="suspend-section">
-                                <h4>Suspend Customer</h4>
-
-                                {/* Dropdown version */}
-                                <select onChange={(e) => console.log("Suspend Duration:", e.target.value)}>
-                                    <option value="">Select duration</option>
-                                    <option value="5">5 minutes</option>
-                                    <option value="15">15 minutes</option>
-                                    <option value="30">30 minutes</option>
-                                    <option value="60">1 hour</option>
-                                </select>
-
-                                {/*    OR TimePicker version using Semantic UI    */}
-                                {/* <TimeInput
-                    name="suspendTime"
-                    onChange={(event, data) => console.log("Suspend until:", data.value)}
-                /> */}
-                            </div>
-
+                            <h4>Suspend Customer</h4>
+                            <select>
+                                <option value="">Select duration</option>
+                                <option value="5">5 minutes</option>
+                                <option value="15">15 minutes</option>
+                                <option value="30">30 minutes</option>
+                                <option value="60">1 hour</option>
+                            </select>
                         </div>
                     </Grid.Column>
 
                 </Grid.Row>
 
             </Grid>
+
         </main>
     );
 
