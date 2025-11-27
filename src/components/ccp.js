@@ -93,12 +93,10 @@ const Ccp = () => {
     let textLang = '';
 
     // Check if we know the language already
-    if (languageTranslate && Array.isArray(languageTranslate)) {
-      for (var i = 0; i < languageTranslate.length; i++) {
-        if (languageTranslate[i].contactId === contactId) {
-          textLang = languageTranslate[i].lang;
-          break;
-        }
+    for (var i = 0; i < languageTranslate.length; i++) {
+      if (languageTranslate[i].contactId === contactId) {
+        textLang = languageTranslate[i].lang;
+        break;
       }
     }
 
@@ -124,10 +122,8 @@ const Ccp = () => {
       else array.push(item);
     }
 
-    // Create a new array reference to ensure React state updates properly
-    const updatedLanguageTranslate = [...(languageTranslate || [])];
-    upsert(updatedLanguageTranslate, { contactId: contactId, lang: textLang });
-    setLanguageTranslate(updatedLanguageTranslate);
+    upsert(languageTranslate, { contactId: contactId, lang: textLang });
+    setLanguageTranslate(languageTranslate);
 
     // Translate customer message into English
     let translatedMessage = await translateText(content, textLang, 'en');
@@ -320,15 +316,11 @@ const Ccp = () => {
               'CDEBUG ===> Setting lang code from attribites:',
               localLanguageTranslate
             );
-            // Create a new array reference instead of mutating directly
-            const updatedLanguageTranslate = [
-              ...(languageTranslate || []),
-              {
-                contactId: contact.contactId,
-                lang: localLanguageTranslate
-              }
-            ];
-            setLanguageTranslate(updatedLanguageTranslate);
+            languageTranslate.push({
+              contactId: contact.contactId,
+              lang: localLanguageTranslate
+            });
+            setLanguageTranslate(languageTranslate);
             setRefreshChild('updated');
           }
           console.log(
