@@ -3,320 +3,545 @@ import { Grid } from 'semantic-ui-react';
 import { Amplify } from 'aws-amplify';
 // import awsconfig from '../aws-exports';
 import Chatroom from './chatroom';
-import translateText from './translate'
-import detectText from './detectText'
+import translateText from './translate';
+import detectText from './detectText';
 import { relayAgentMessage } from './agentRelayApi';
 
-import { addChat, setLanguageTranslate, clearChat, useGlobalState, setCurrentContactId } from '../store/state';
+import {
+  addChat,
+  setLanguageTranslate,
+  clearChat,
+  useGlobalState,
+  setCurrentContactId
+} from '../store/state';
 
 // Amplify.configure(awsconfig);
 
 const Ccp = () => {
-    const [languageTranslate] = useGlobalState('languageTranslate');
-    var localLanguageTranslate = [];
-    const [Chats] = useGlobalState('Chats');
-    const [lang, setLang] = useState("");
-    const [currentContactId] = useGlobalState('currentContactId');
-    const [languageOptions] = useGlobalState('languageOptions');
-    const [agentChatSessionState, setAgentChatSessionState] = useState([]);
-    const [setRefreshChild] = useState([]);
+  const [languageTranslate] = useGlobalState('languageTranslate');
+  var localLanguageTranslate = [];
+  const [Chats] = useGlobalState('Chats');
+  const [lang, setLang] = useState('');
+  const [currentContactId] = useGlobalState('currentContactId');
+  const [languageOptions] = useGlobalState('languageOptions');
+  const [agentChatSessionState, setAgentChatSessionState] = useState([]);
+  const [, setRefreshChild] = useState(null);
 
-    console.log(lang)
-    console.log(currentContactId)
-    //console.log(Chats)
+  // Customer info pulled from contact attributes
+  const [customerInfo, setCustomerInfo] = useState({
+    carrier: '',
+    originalNumber: '',
+    countryCode: '',
+    suspendMinutes: '',
+    isSuspended: false
+  });
 
-    // *******
-    // Subscribe to the chat session
-    // *******
-    // function getEvents(contact, agentChatSession) {
-    //     console.log(agentChatSession);
-    //     contact.getAgentConnection().getMediaController().then(controller => {
-    //         controller.onMessage(messageData => {
-    //             if (messageData.chatDetails.participantId === messageData.data.ParticipantId) {
-    //                 console.log(`CDEBUG ===> Agent ${messageData.data.DisplayName} Says`,
-    //                     messageData.data.Content)
-    //             }
-    //             else {
-    //                 console.log(`CDEBUG ===> Customer ${messageData.data.DisplayName} Says`, messageData.data.Content);
-    //                 processChatText(messageData.data.Content, messageData.data.Type, messageData.data.ContactId);
-    //             }
-    //         })
-    //     })
-    // }
-    function getEvents(contact, agentChatSession) {
+  // UI state for API call
+  const [isSaving, setIsSaving] = useState(false);
+  const [apiMessage, setApiMessage] = useState('');
+
+  console.log(lang);
+  console.log(currentContactId);
+
+  // ************************
+  // Chat session events
+  // ************************
+  function getEvents(contact, agentChatSession) {
     console.log(agentChatSession);
-    contact.getAgentConnection().getMediaController().then(controller => {
-        controller.onMessage(messageData => {
-            if (messageData.chatDetails.participantId === messageData.data.ParticipantId) {
-                // ====== AGENT MESSAGE ======
-                console.log(`CDEBUG ===> Agent ${messageData.data.DisplayName} Says`,
-                    messageData.data.Content);
+    contact
+      .getAgentConnection()
+      .getMediaController()
+      .then((controller) => {
+        controller.onMessage((messageData) => {
+          if (
+            messageData.chatDetails.participantId ===
+            messageData.data.ParticipantId
+          ) {
+            // ====== AGENT MESSAGE ======
+            console.log(
+              `CDEBUG ===> Agent ${messageData.data.DisplayName} Says`,
+              messageData.data.Content
+            );
 
-                // 👇 NEW: send agent message to your backend
-                relayAgentMessage({
-                    contactId: messageData.data.ContactId || contact.contactId,
-                    content: messageData.data.Content,
-                    displayName: messageData.data.DisplayName
-                });
-            }
-            else {
-                // ====== CUSTOMER MESSAGE ======
-                console.log(`CDEBUG ===> Customer ${messageData.data.DisplayName} Says`,
-                    messageData.data.Content);
-                processChatText(
-                    messageData.data.Content,
-                    messageData.data.Type,
-                    messageData.data.ContactId
-                );
-            }
-        })
-    })
-}
+            // Send agent message to backend
+            relayAgentMessage({
+              contactId: messageData.data.ContactId || contact.contactId,
+              content: messageData.data.Content,
+              displayName: messageData.data.DisplayName
+            });
+          } else {
+            // ====== CUSTOMER MESSAGE ======
+            console.log(
+              `CDEBUG ===> Customer ${messageData.data.DisplayName} Says`,
+              messageData.data.Content
+            );
+            processChatText(
+              messageData.data.Content,
+              messageData.data.Type,
+              messageData.data.ContactId
+            );
+          }
+        });
+      });
+  }
 
-    // *******
-    // Processing the incoming chat from the Customer
-    // *******
-    async function processChatText(content, type, contactId) {
-        // Check if we know the language for this contactId, if not use dectectText(). This process means we only perform comprehend language detection at most once.
-        console.log(type);
-        let textLang = '';
-        for (var i = 0; i < languageTranslate.length; i++) {
-            if (languageTranslate[i].contactId === contactId) {
-                textLang = languageTranslate[i].lang
-                break
-            }
-        }
-        // If the contatId was not found in the store, or the store is empty, perform dectText API to comprehend
-        if (localLanguageTranslate.length === 0 || textLang === '') {
-            let tempLang = await detectText(content);
-            textLang = tempLang.textInterpretation.language
-        }
+  // ************************
+  // Processing incoming chat from the customer
+  // ************************
+  async function processChatText(content, type, contactId) {
+    console.log(type);
+    let textLang = '';
 
-
-        // Update (or Add if new contactId) the store with the the language code
-        function upsert(array, item) { // (1)
-            const i = array.findIndex(_item => _item.contactId === item.contactId);
-            if (i > -1) array[i] = item; // (2)
-            else array.push(item);
-        }
-        upsert(languageTranslate, { contactId: contactId, lang: textLang })
-        setLanguageTranslate(languageTranslate);
-
-        // Translate the customer message into English.
-        let translatedMessage = await translateText(content, textLang, 'en');
-        console.log(`CDEBUG ===>  Original Message: ` + content + `\n Translated Message: ` + translatedMessage);
-        // create the new message to add to Chats.
-        let data2 = {
-            contactId: contactId,
-            username: 'customer',
-            content: <p>{content}</p>,
-            translatedMessage: <p>{translatedMessage}</p>
-        };
-        // Add the new message to the store
-        addChat(prevMsg => [...prevMsg, data2]);
+    // Check if we know the language already
+    for (var i = 0; i < languageTranslate.length; i++) {
+      if (languageTranslate[i].contactId === contactId) {
+        textLang = languageTranslate[i].lang;
+        break;
+      }
     }
 
-    // *******
-    // Subscribing to CCP events. See : https://github.com/aws/amazon-connect-streams/blob/master/Documentation.md
-    // *******
-    function subscribeConnectEvents() {
-        window.connect.core.onViewContact(function (event) {
-            var contactId = event.contactId;
-            console.log("CDEBUG ===> onViewContact", contactId)
-            setCurrentContactId(contactId);
-        });
+    // If not known, detect it
+    if (localLanguageTranslate.length === 0 || textLang === '') {
+      let tempLang = await detectText(content);
+      textLang = tempLang.textInterpretation.language;
+    }
 
-        console.log("CDEBUG ===> subscribeConnectEvents");
+    // Upsert helper
+    function upsert(array, item) {
+      const i = array.findIndex(
+        (_item) => _item.contactId === item.contactId
+      );
+      if (i > -1) array[i] = item;
+      else array.push(item);
+    }
 
-        // If this is a chat session
-        if (window.connect.ChatSession) {
-            console.log("CDEBUG ===> Subscribing to Connect Contact Events for chats");
-            window.connect.contact(contact => {
+    upsert(languageTranslate, { contactId: contactId, lang: textLang });
+    setLanguageTranslate(languageTranslate);
 
-                // This is invoked when CCP is ringing
-                contact.onConnecting(() => {
-                    console.log("CDEBUG ===> onConnecting() >> contactId: ", contact.contactId);
-                    let contactAttributes = contact.getAttributes();
-                    console.log("CDEBUG ===> contactAttributes: ", JSON.stringify(contactAttributes));
-                    let contactQueue = contact.getQueue();
-                    console.log("CDEBUG ===> contactQueue: ", contactQueue);
-                });
+    // Translate customer message into English
+    let translatedMessage = await translateText(content, textLang, 'en');
+    console.log(
+      `CDEBUG ===>  Original Message: ` +
+        content +
+        `\n Translated Message: ` +
+        translatedMessage
+    );
 
-                // This is invoked when the chat is accepted
-                contact.onAccepted(async () => {
-                    console.log("CDEBUG ===> onAccepted: ", contact);
-                    const cnn = contact.getConnections().find(cnn => cnn.getType() === window.connect.ConnectionType.AGENT);
-                    const agentChatSession = await cnn.getMediaController();
-                    setCurrentContactId(contact.contactId)
-                    console.log("CDEBUG ===> agentChatSession ", agentChatSession)
-                    // Save the session to props, this is required to send messages within the chatroom.js
-                    setAgentChatSessionState(agentChatSessionState => [...agentChatSessionState, { [contact.contactId]: agentChatSession }])
-
-                    // Get the language from the attributes, if the value is valid then add to the store
-                    localLanguageTranslate = contact.getAttributes().x_lang.value
-                    if (Object.keys(languageOptions).find(key => languageOptions[key] === localLanguageTranslate) !== undefined) {
-                        console.log("CDEBUG ===> Setting lang code from attribites:", localLanguageTranslate)
-                        languageTranslate.push({ contactId: contact.contactId, lang: localLanguageTranslate })
-                        setLanguageTranslate(languageTranslate);
-                        setRefreshChild('updated') // Workaround to force a refresh of the chatroom UI to show the updated language based on contact attribute.
-
-                    }
-                    console.log("CDEBUG ===> onAccepted, languageTranslate ", languageTranslate)
-
-                });
-
-                // This is invoked when the customer and agent are connected
-                contact.onConnected(async () => {
-                    console.log("CDEBUG ===> onConnected() >> contactId: ", contact.contactId);
-                    const cnn = contact.getConnections().find(cnn => cnn.getType() === window.connect.ConnectionType.AGENT);
-                    const agentChatSession = await cnn.getMediaController();
-                    getEvents(contact, agentChatSession);
-                });
-
-                // This is invoked when new agent data is available
-                contact.onRefresh(() => {
-                    console.log("CDEBUG ===> onRefresh() >> contactId: ", contact.contactId);
-                });
-
-                // This is invoked when the agent moves to ACW
-                contact.onEnded(() => {
-                    console.log("CDEBUG ===> onEnded() >> contactId: ", contact.contactId);
-                    setLang('');
-                });
-
-                // This is invoked when the agent moves out of ACW to a different state
-                contact.onDestroy(() => {
-                    console.log("CDEBUG ===> onDestroy() >> contactId: ", contact.contactId);
-                    // TODO need to remove the previous chats from the store
-                    //clearChat()
-                    setCurrentContactId('');
-                    clearChat();
-                });
-            });
-
-            /* 
-            **** Subscribe to the agent API **** 
-            See : https://github.com/aws/amazon-connect-streams/blob/master/Documentation.md
-            */
-
-            console.log("CDEBUG ===> Subscribing to Connect Agent Events");
-            window.connect.agent((agent) => {
-                agent.onStateChange((agentStateChange) => {
-                    // On agent state change, update the React state.
-                    let state = agentStateChange.newState;
-                    console.log("CDEBUG ===> New State: ", state);
-
-                });
-
-            });
-        }
-        else {
-            console.log("CDEBUG ===> waiting 3s");
-            setTimeout(function () { subscribeConnectEvents(); }, 3000);
-        }
+    let data2 = {
+      contactId: contactId,
+      username: 'customer',
+      content: <p>{content}</p>,
+      translatedMessage: <p>{translatedMessage}</p>
     };
 
+    addChat((prevMsg) => [...prevMsg, data2]);
+  }
 
-    // ***** 
-    // Loading CCP
-    // *****
-    useEffect(() => {
-        const connectUrl = process.env.REACT_APP_CONNECT_INSTANCE_URL ?
-            process.env.REACT_APP_CONNECT_INSTANCE_URL : "https://connexsalesdemo.my.connect.aws";
-        window.connect.agentApp.initApp(
-            "ccp",
-            "ccp-container",
-            connectUrl + "/connect/ccp-v2/", {
-            ccpParams: {
-                region: process.env.REACT_APP_CONNECT_REGION,
-                pageOptions: {                  // optional
-                    enableAudioDeviceSettings: true, // optional, defaults to 'false'
-                    enablePhoneTypeSettings: true // optional, defaults to 'true'
-                }
-            }
-        }
-        );
+  // ************************
+  // Helpers for reading contact attributes
+  // ************************
+  const getAttr = (attrs, ...keys) => {
+    for (const key of keys) {
+      if (attrs[key]) return attrs[key].value;
+      if (attrs[key?.toLowerCase()]) return attrs[key.toLowerCase()].value;
+      if (attrs[key?.toUpperCase()]) return attrs[key.toUpperCase()].value;
+    }
+    return '';
+  };
+
+  function updateCustomerInfoFromContact(contact) {
+    if (!contact) return;
+
+    const attrs = contact.getAttributes() || {};
+    console.log('CDEBUG ===> attributes seen by UI:', attrs);
+
+    const carrier = getAttr(attrs, 'carrier', 'Carrier', 'customerCarrier');
+    const originalNumber = getAttr(
+      attrs,
+      'originalNumber',
+      'CustomerOriginalNumber',
+      'CustomerNumber'
+    );
+    const countryCode = getAttr(attrs, 'countryCode', 'CustomercountryCode');
+    const suspendMinutes = getAttr(
+      attrs,
+      'SuspendMinutes',
+      'SuspendDuration'
+    );
+    const isSuspended = attrs.isSuspended?.value === 'true';
+
+    setCustomerInfo({
+      carrier,
+      originalNumber,
+      countryCode,
+      suspendMinutes,
+      isSuspended
+    });
+  }
+
+  // ************************
+  // API: apply suspension (UI → API Gateway → Lambda)
+  // ************************
+  const mapMinutesToKey = (minutes) => {
+    const map = {
+      '5': '5_MIN',
+      '15': '15_MIN',
+      '30': '30_MIN',
+      '60': '60_MIN'
+    };
+    return map[minutes] || null;
+  };
+
+  async function handleApplySuspension() {
+    try {
+      setIsSaving(true);
+      setApiMessage('');
+
+      if (!customerInfo.originalNumber) {
+        setApiMessage('No phone number available for this contact.');
+        return;
+      }
+
+      const durationKey = mapMinutesToKey(customerInfo.suspendMinutes);
+
+      if (customerInfo.isSuspended && !durationKey) {
+        setApiMessage('Please select a suspension duration.');
+        return;
+      }
+
+      const payload = {
+        phone: customerInfo.originalNumber.slice(1),      // e.g. "+16477782523"
+        flag: customerInfo.isSuspended,        // checkbox
+        contactId: currentContactId,
+        durationKey                              // e.g. "30_MIN"
+      };
+
+      console.log('Sending suspension payload:', payload);
+
+      const apiUrl =
+        process.env.REACT_APP_SUSPEND_API_URL ||
+        'https://h9wnrz6xlk.execute-api.ca-central-1.amazonaws.com/suspend';
+
+      const resp = await fetch(apiUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+
+      if (!resp.ok) {
+        const text = await resp.text();
+        throw new Error(`API error ${resp.status}: ${text}`);
+      }
+
+      const data = await resp.json().catch(() => ({}));
+      console.log('Suspend API response:', data);
+      setApiMessage('Suspension updated successfully.');
+    } catch (err) {
+      console.error(err);
+      setApiMessage('Failed to update suspension. Check console/logs.');
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  // ************************
+  // Subscribing to CCP events (Streams)
+  // ************************
+  function subscribeConnectEvents() {
+    window.connect.core.onViewContact(function (event) {
+      var contactId = event.contactId;
+      console.log('CDEBUG ===> onViewContact', contactId);
+      setCurrentContactId(contactId);
+    });
+
+    console.log('CDEBUG ===> subscribeConnectEvents');
+
+    if (window.connect.ChatSession) {
+      console.log(
+        'CDEBUG ===> Subscribing to Connect Contact Events for chats'
+      );
+      window.connect.contact((contact) => {
+        // Ringing
+        contact.onConnecting(() => {
+          console.log(
+            'CDEBUG ===> onConnecting() >> contactId: ',
+            contact.contactId
+          );
+          let contactAttributes = contact.getAttributes();
+          console.log(
+            'CDEBUG ===> contactAttributes: ',
+            JSON.stringify(contactAttributes)
+          );
+          let contactQueue = contact.getQueue();
+          console.log('CDEBUG ===> contactQueue: ', contactQueue);
+
+          updateCustomerInfoFromContact(contact);
+        });
+
+        // Accepted
+        contact.onAccepted(async () => {
+          console.log('CDEBUG ===> onAccepted: ', contact);
+          const cnn = contact
+            .getConnections()
+            .find(
+              (cnn) =>
+                cnn.getType() === window.connect.ConnectionType.AGENT
+            );
+          const agentChatSession = await cnn.getMediaController();
+          setCurrentContactId(contact.contactId);
+          console.log('CDEBUG ===> agentChatSession ', agentChatSession);
+
+          setAgentChatSessionState((agentChatSessionState) => [
+            ...agentChatSessionState,
+            { [contact.contactId]: agentChatSession }
+          ]);
+
+          // Language from x_lang attribute
+          const attrs = contact.getAttributes() || {};
+          localLanguageTranslate = attrs.x_lang?.value;
+          if (
+            localLanguageTranslate &&
+            Object.keys(languageOptions).find(
+              (key) => languageOptions[key] === localLanguageTranslate
+            ) !== undefined
+          ) {
+            console.log(
+              'CDEBUG ===> Setting lang code from attribites:',
+              localLanguageTranslate
+            );
+            languageTranslate.push({
+              contactId: contact.contactId,
+              lang: localLanguageTranslate
+            });
+            setLanguageTranslate(languageTranslate);
+            setRefreshChild('updated');
+          }
+          console.log(
+            'CDEBUG ===> onAccepted, languageTranslate ',
+            languageTranslate
+          );
+
+          updateCustomerInfoFromContact(contact);
+        });
+
+        // Connected
+        contact.onConnected(async () => {
+          console.log(
+            'CDEBUG ===> onConnected() >> contactId: ',
+            contact.contactId
+          );
+          const cnn = contact
+            .getConnections()
+            .find(
+              (cnn) =>
+                cnn.getType() === window.connect.ConnectionType.AGENT
+            );
+          const agentChatSession = await cnn.getMediaController();
+          getEvents(contact, agentChatSession);
+
+          updateCustomerInfoFromContact(contact);
+        });
+
+        // Refresh
+        contact.onRefresh(() => {
+          console.log(
+            'CDEBUG ===> onRefresh() >> contactId: ',
+            contact.contactId
+          );
+          updateCustomerInfoFromContact(contact);
+        });
+
+        // Ended (ACW)
+        contact.onEnded(() => {
+          console.log(
+            'CDEBUG ===> onEnded() >> contactId: ',
+            contact.contactId
+          );
+          setLang('');
+          setCustomerInfo({
+            carrier: '',
+            originalNumber: '',
+            countryCode: '',
+            suspendMinutes: '',
+            isSuspended: false
+          });
+        });
+
+        // Destroyed
+        contact.onDestroy(() => {
+          console.log(
+            'CDEBUG ===> onDestroy() >> contactId: ',
+            contact.contactId
+          );
+          setCurrentContactId('');
+          clearChat();
+          setCustomerInfo({
+            carrier: '',
+            originalNumber: '',
+            countryCode: '',
+            suspendMinutes: '',
+            isSuspended: false
+          });
+        });
+      });
+
+      // Agent events
+      console.log('CDEBUG ===> Subscribing to Connect Agent Events');
+      window.connect.agent((agent) => {
+        agent.onStateChange((agentStateChange) => {
+          let state = agentStateChange.newState;
+          console.log('CDEBUG ===> New State: ', state);
+        });
+      });
+    } else {
+      console.log('CDEBUG ===> waiting 3s');
+      setTimeout(function () {
         subscribeConnectEvents();
-    }, []);
+      }, 3000);
+    }
+  }
 
-    // return (
-    //     <main>
-    //       <Grid columns='equal' stackable padded>
-    //       <Grid.Row>
-    //         {/* CCP window will load here */}
-    //         <div id="ccp-container"></div>
-    //         {/* Translate window will laod here. We pass the agent state to be able to use this to push messages to CCP */}
-    //         <div id="chatroom" ><Chatroom session={agentChatSessionState}/> </div> 
-    //         </Grid.Row>
-    //       </Grid>
-    //     </main>
-    // );
-    
-   return (
-  <main className="ccp-layout">
-    <div className="ccp-shell">
-      <Grid stackable columns={3}>
-        <Grid.Row verticalAlign="top">
+  // ************************
+  // Loading CCP
+  // ************************
+  useEffect(() => {
+    const connectUrl = process.env.REACT_APP_CONNECT_INSTANCE_URL
+      ? process.env.REACT_APP_CONNECT_INSTANCE_URL
+      : 'https://connexsalesdemo.my.connect.aws';
 
-          {/* LEFT: CCP + Translate (stacked) */}
-          <Grid.Column width={8}>
-            <div className="panel-card panel-ccp">
-              <h3 className="panel-title">Agent CCP</h3>
-              <div id="ccp-container" className="ccp-container" />
-            </div>
+    window.connect.agentApp.initApp(
+      'ccp',
+      'ccp-container',
+      connectUrl + '/connect/ccp-v2/',
+      {
+        ccpParams: {
+          region: process.env.REACT_APP_CONNECT_REGION,
+          pageOptions: {
+            enableAudioDeviceSettings: true,
+            enableoriginalNumberTypeSettings: true
+          }
+        }
+      }
+    );
 
-            <div className="panel-card panel-chat">
-              <h3 className="panel-title">
-                Translate – ({currentContactId ? currentContactId.slice(0, 8) + "…" : "-"})
-              </h3>
-              <div id="chatroom" className="chatroom-wrapper">
-                <Chatroom session={agentChatSessionState} />
-              </div>
-            </div>
-          </Grid.Column>
+    subscribeConnectEvents();
+  }, []);
 
-          {/* CENTER: Customer info */}
-          <Grid.Column width={4}>
-            <div className="panel-card panel-info">
-              <h3 className="panel-title">Customer Information</h3>
-              <p><strong>Contact ID:</strong> {currentContactId || "none"}</p>
-              <p><strong>Carrier:</strong> T-Mobile</p>
-              <p><strong>Phone:</strong> +1 (555) 123-4567</p>
-              <p><strong>Email:</strong> customer@email.com</p>
-            </div>
-          </Grid.Column>
-
-          {/* RIGHT: Actions */}
-          <Grid.Column width={4}>
-            <div className="panel-card panel-tools">
-              <h3 className="panel-title">Conversation Tools</h3>
-
-              <div className="field-block">
-                <label>
-                  <input type="checkbox" /> Flag conversation
-                </label>
+  return (
+    <main className="ccp-layout">
+      <div className="ccp-shell">
+        <Grid stackable columns={3}>
+          <Grid.Row verticalAlign="top">
+            {/* LEFT: CCP + Translate (stacked) */}
+            <Grid.Column width={8}>
+              <div className="panel-card panel-ccp">
+                <h3 className="panel-title">Agent CCP</h3>
+                <div id="ccp-container" className="ccp-container" />
               </div>
 
-              <div className="field-block">
-                <label htmlFor="suspend-select">Suspend customer</label>
-                <select id="suspend-select">
-                  <option value="">Select duration</option>
-                  <option value="5">5 minutes</option>
-                  <option value="15">15 minutes</option>
-                  <option value="30">30 minutes</option>
-                  <option value="60">1 hour</option>
-                </select>
+              <div className="panel-card panel-chat">
+                <h3 className="panel-title">
+                  Translate – (
+                  {currentContactId
+                    ? currentContactId.slice(0, 8) + '…'
+                    : '-'}
+                  )
+                </h3>
+                <div id="chatroom" className="chatroom-wrapper">
+                  <Chatroom session={agentChatSessionState} />
+                </div>
               </div>
-            </div>
-          </Grid.Column>
+            </Grid.Column>
 
-        </Grid.Row>
-      </Grid>
-    </div>
-  </main>
-);
+            {/* CENTER: Customer info */}
+            <Grid.Column width={4}>
+              <div className="panel-card panel-info">
+                <h3 className="panel-title">Customer Information</h3>
+                <p>
+                  <strong>Contact ID:</strong>{' '}
+                  {currentContactId || 'none'}
+                </p>
+                <p>
+                  <strong>Carrier:</strong>{' '}
+                  {customerInfo.carrier || '-'}
+                </p>
+                <p>
+                  <strong>Number:</strong>{' '}
+                  {customerInfo.originalNumber || '-'}
+                </p>
+                <p>
+                  <strong>Country:</strong>{' '}
+                  {customerInfo.countryCode || '-'}
+                </p>
+              </div>
+            </Grid.Column>
 
-        
+            {/* RIGHT: Actions */}
+            <Grid.Column width={4}>
+              <div className="panel-card panel-tools">
+                <h3 className="panel-title">Conversation Tools</h3>
+
+                {/* Checkbox bound to isSuspended */}
+                <div className="field-block">
+                  <label>
+                    <input
+                      type="checkbox"
+                      checked={customerInfo.isSuspended}
+                      onChange={(e) =>
+                        setCustomerInfo((ci) => ({
+                          ...ci,
+                          isSuspended: e.target.checked
+                        }))
+                      }
+                    />{' '}
+                    Suspend customer
+                  </label>
+                </div>
+
+                {/* Duration dropdown */}
+                <div className="field-block">
+                  <label htmlFor="suspend-select">Suspend duration</label>
+                  <select
+                    id="suspend-select"
+                    value={customerInfo.suspendMinutes || ''}
+                    onChange={(e) =>
+                      setCustomerInfo((ci) => ({
+                        ...ci,
+                        suspendMinutes: e.target.value
+                      }))
+                    }
+                  >
+                    <option value="">Select duration</option>
+                    <option value="5">5 minutes</option>
+                    <option value="15">15 minutes</option>
+                    <option value="30">30 minutes</option>
+                    <option value="60">1 hour</option>
+                  </select>
+                </div>
+
+                {/* Apply suspension button */}
+                <div className="field-block">
+                  <button
+                    type="button"
+                    onClick={handleApplySuspension}
+                    disabled={isSaving}
+                  >
+                    {isSaving ? 'Updating…' : 'Apply suspension'}
+                  </button>
+                </div>
+
+                {apiMessage && (
+                  <div className="field-block">
+                    <small>{apiMessage}</small>
+                  </div>
+                )}
+              </div>
+            </Grid.Column>
+          </Grid.Row>
+        </Grid>
+      </div>
+    </main>
+  );
 };
 
 export default Ccp;
