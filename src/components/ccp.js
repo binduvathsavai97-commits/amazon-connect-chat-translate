@@ -428,120 +428,92 @@ const Ccp = () => {
   }, []);
 
   return (
-    <main className="ccp-layout">
-      <div className="ccp-shell">
-        <Grid stackable columns={3}>
-          <Grid.Row verticalAlign="top">
-            {/* LEFT: CCP + Translate (stacked) */}
-            <Grid.Column width={8}>
-              <div className="panel-card panel-ccp">
-                <h3 className="panel-title">Agent CCP</h3>
-                <div id="ccp-container" className="ccp-container" />
-              </div>
+  <main className="ccp-layout">
+      {/* Top logo bar */}
+      <header className="logo-bar">
+        <img src="./TransLink -logo.png" alt="Translink Logo" />
+      </header>
 
-              <div className="panel-card panel-chat">
-                <h3 className="panel-title">
-                  Translate – (
-                  {currentContactId
-                    ? currentContactId.slice(0, 8) + '…'
-                    : '-'}
-                  )
-                </h3>
-                <div id="chatroom" className="chatroom-wrapper">
-                  <Chatroom session={agentChatSessionState} />
-                </div>
-              </div>
-            </Grid.Column>
+      {/* 3-column grid */}
+      <section className="main-grid">
+        {/* LEFT: Agent CCP */}
+        <div className="block block-ccp">
+          <h3>Agent CCP</h3>
+          <div id="ccp-container" />
+        </div>
 
-            {/* CENTER: Customer info */}
-            <Grid.Column width={4}>
-              <div className="panel-card panel-info">
-                <h3 className="panel-title">Customer Information</h3>
-                <p>
-                  <strong>Contact ID:</strong>{' '}
-                  {currentContactId || 'none'}
-                </p>
-                <p>
-                  <strong>Carrier:</strong>{' '}
-                  {customerInfo.carrier || '-'}
-                </p>
-                <p>
-                  <strong>Number:</strong>{' '}
-                  {customerInfo.originalNumber || '-'}
-                </p>
-                <p>
-                  <strong>Country:</strong>{' '}
-                  {customerInfo.countryCode || '-'}
-                </p>
-              </div>
-            </Grid.Column>
+        {/* CENTER: Translate */}
+        <div className="block block-translate">
+          <h3>Translate</h3>
+          <div id="chatroom">
+            <Chatroom session={agentChatSessionState} />
+          </div>
+        </div>
 
-            {/* RIGHT: Actions */}
-            <Grid.Column width={4}>
-              <div className="panel-card panel-tools">
-                <h3 className="panel-title">Conversation Tools</h3>
+        {/* RIGHT TOP: Customer Info */}
+        <div className="block block-customer">
+          <h3>Customer Info</h3>
+          <p>
+            <strong>Contact ID:</strong> {currentContactId || 'none'}
+          </p>
+          <p>
+            <strong>Carrier:</strong> {customerInfo.carrier || '-'}
+          </p>
+          <p>
+            <strong>Phone:</strong> {customerInfo.originalNumber || '-'}
+          </p>
+          <p>
+            <strong>Country:</strong> {customerInfo.countryCode || '-'}
+          </p>
+          <p>
+            {/* <strong>Status:</strong> {statusText} */}
+          </p>
+        </div>
 
-                {/* Checkbox bound to isSuspended */}
-                <div className="field-block">
-                  <label>
-                    <input
-                      type="checkbox"
-                      checked={customerInfo.isSuspended}
-                      onChange={(e) =>
-                        setCustomerInfo((ci) => ({
-                          ...ci,
-                          isSuspended: e.target.checked
-                        }))
-                      }
-                    />{' '}
-                    Flag Contact
-                  </label>
-                </div>
+        {/* RIGHT BOTTOM: Conversation Tools */}
+        <div className="block block-tools">
+          <h3>Conversation Tools</h3>
 
-                {/* Duration dropdown */}
-                <div className="field-block">
-                  <label htmlFor="suspend-select">Suspend duration</label>
-                  <select
-                    id="suspend-select"
-                    value={customerInfo.suspendMinutes || ''}
-                    onChange={(e) =>
-                      setCustomerInfo((ci) => ({
-                        ...ci,
-                        suspendMinutes: e.target.value
-                      }))
-                    }
-                  >
-                    <option value="">Select duration</option>
-                    <option value="5">5 minutes</option>
-                    <option value="15">15 minutes</option>
-                    <option value="30">30 minutes</option>
-                    <option value="60">1 hour</option>
-                  </select>
-                </div>
+          <label>
+            <input
+              type="checkbox"
+              checked={customerInfo.isSuspended}
+              onChange={(e) =>
+                setCustomerInfo((ci) => ({
+                  ...ci,
+                  isSuspended: e.target.checked
+                }))
+              }
+            />{' '}
+            Suspend customer
+          </label>
 
-                {/* Apply suspension button */}
-                <div className="field-block">
-                  <button
-                    type="button"
-                    onClick={handleApplySuspension}
-                    disabled={isSaving}
-                  >
-                    {isSaving ? 'Updating…' : 'Apply suspension'}
-                  </button>
-                </div>
+          <select
+            disabled={!customerInfo.isSuspended}
+            value={customerInfo.suspendMinutes || ''}
+            onChange={(e) =>
+              setCustomerInfo((ci) => ({
+                ...ci,
+                suspendMinutes: e.target.value
+              }))
+            }
+          >
+            <option value="">Select duration</option>
+            <option value="5">5 minutes</option>
+            <option value="30">30 minutes</option>
+            <option value="60">1 hour</option>
+          </select>
 
-                {apiMessage && (
-                  <div className="field-block">
-                    <small>{apiMessage}</small>
-                  </div>
-                )}
-              </div>
-            </Grid.Column>
-          </Grid.Row>
-        </Grid>
-      </div>
+          <button onClick={handleApplySuspension}>
+            {isSaving ? 'Updating…' : 'Apply'}
+          </button>
+
+          {apiMessage && <small>{apiMessage}</small>}
+        </div>
+      </section>
     </main>
-  );
+);
+
 };
 
 export default Ccp;
