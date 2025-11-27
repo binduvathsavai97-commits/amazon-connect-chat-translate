@@ -1,137 +1,156 @@
 import React, { useEffect, useRef, useState } from 'react';
 import './chatroom.css';
 import Message from './message.js';
-//import translateText from './translate'
-import translateTextAPI from './translateAPI'
+import translateTextAPI from './translateAPI';
 import { addChat, useGlobalState } from '../store/state';
 
 const Chatroom = (props) => {
+  const [Chats] = useGlobalState('Chats');
+  const [currentContactId] = useGlobalState('currentContactId');
+  const [languageTranslate] = useGlobalState('languageTranslate');
+  const [languageOptions] = useGlobalState('languageOptions');
 
-    const [Chats] = useGlobalState('Chats');
-    const currentContactId = useGlobalState('currentContactId');
-    const [newMessage, setNewMessage] = useState("");
-    const [languageTranslate] = useGlobalState('languageTranslate');
-    const [languageOptions] = useGlobalState('languageOptions');
-    const agentUsername = 'AGENT';
-    const messageEl = useRef(null);
-    const input = useRef(null);
-    
-    function getKeyByValue(object) {
-        let obj = languageTranslate.find(o => o.contactId === currentContactId[0]);
-        if(obj === undefined) {
-            return
-          } else {
-                return Object.keys(object).find(key => object[key] === obj.lang);
-        }
-        
+  const [newMessage, setNewMessage] = useState('');
+  const agentUsername = 'AGENT';
+
+  const messageEl = useRef(null);
+  const input = useRef(null);
+
+  // ---------- helpers for language ----------
+  const currentLangEntry = languageTranslate.find(
+    (o) => o.contactId === currentContactId
+  );
+  const targetLangCode = currentLangEntry?.lang || '';
+
+  // e.g. languageOptions = { English: "en", French: "fr" }
+  const targetLangLabel = targetLangCode
+    ? Object.keys(languageOptions).find(
+        (key) => languageOptions[key] === targetLangCode
+      )
+    : '';
+
+  // header label like: "Translate - (fr) French"
+  const headerLabel = targetLangCode
+    ? `Translate - (${targetLangCode}) ${targetLangLabel || ''}`
+    : 'Translate';
+
+  // ---------- send message to Connect Chat session ----------
+  const sendMessage = async (session, content) => {
+    if (!session) {
+      console.warn('No active chat session found for contact', currentContactId);
+      return;
+    }
+    const awsSdkResponse = await session.sendMessage({
+      contentType: 'text/plain',
+      message: content
+    });
+    const { AbsoluteTime, Id } = awsSdkResponse.data;
+    console.log('Message sent to Connect:', AbsoluteTime, Id);
+  };
+
+  // Find agentChatSession for this contactId from props.session
+  const getSessionForContact = (contactId) => {
+    if (!props.session || !Array.isArray(props.session)) return null;
+    for (const obj of props.session) {
+      const keys = Object.keys(obj || {});
+      if (keys.includes(contactId)) {
+        return obj[contactId];
+      }
+    }
+    return null;
+  };
+
+  // ---------- scroll + focus behaviour ----------
+  useEffect(() => {
+    if (messageEl.current) {
+      const handler = (event) => {
+        const { currentTarget: target } = event;
+        target.scroll({ top: target.scrollHeight, behavior: 'smooth' });
+      };
+      const node = messageEl.current;
+      node.addEventListener('DOMNodeInserted', handler);
+      return () => node.removeEventListener('DOMNodeInserted', handler);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (input.current) {
+      input.current.focus();
+    }
+  }, []);
+
+  // ---------- submit handler ----------
+  async function handleSubmit(event) {
+    event.preventDefault();
+
+    if (!newMessage.trim()) return;
+
+    if (!targetLangCode) {
+      console.warn('No target language found for this contact');
+      setNewMessage('');
+      return;
     }
 
-    const sendMessage = async(session, content) => {
-        const awsSdkResponse = await session.sendMessage({
-            contentType: "text/plain",
-            message: content
-        });
-        const { AbsoluteTime, Id } = awsSdkResponse.data;
-        console.log(AbsoluteTime, Id);
-    }
+    console.log('destLang:', targetLangCode);
+    console.log('Original message:', newMessage);
 
-    useEffect(() => {
-
-        // this ensures that the chat window will auto scoll to ensure the more recent message is in view
-        if (messageEl) {
-            messageEl.current.addEventListener('DOMNodeInserted', event => {
-                const { currentTarget: target } = event;
-                target.scroll({ top: target.scrollHeight, behavior: 'smooth' });
-            });
-        }
-        // this ensure that the input box has the focus on load and after each entry
-        input.current.focus();
-    }, []);
-
-
-    async function handleSubmit(event) {
-        event.preventDefault();
-        // if there is no text in the the chat input box, do nothing.
-        if (newMessage === "") {
-            return;
-        }
-        let destLang = languageTranslate.find(o => o.contactId === currentContactId[0]);
-        console.log("destLang: ", destLang);
-
-        // translate the agent message  ** Swap the below two round if you wnat to test custom termonologies **
-        // let translatedMessage = await translateText(newMessage, 'en', destLang.lang);
-
-        /***********************************CUSTOM TERMINOLOGY*************************************************    
-         
-            To support custom terminologies comment out the line above, and uncomment the below 2 lines 
-         
-         ******************************************************************************************************/
-        console.log(newMessage);
-        let translatedMessageAPI = await translateTextAPI(newMessage, 'en', destLang.lang); // Provide a custom terminology created outside of this deployment
-        //let translatedMessageAPI = await translateTextAPI(newMessage, 'en', destLang.lang, ['connectChatTranslate']); // Provide a custom terminology created outside of this deployment
-        let translatedMessage = translatedMessageAPI.TranslatedText
-
-        console.log(` Original Message: ` + newMessage + `\n Translated Message: ` + translatedMessage);
-        // create the new message to add to Chats.
-        let data2 = {
-            contactId: currentContactId[0],
-            username: agentUsername,
-            content: <p>{newMessage}</p>,
-            translatedMessage: <p>{translatedMessage}</p>, // set to {translatedMessage.TranslatedText} if using custom terminologies
-        };
-        // add the new message to the store
-        addChat(prevMsg => [...prevMsg, data2]);
-        // clear the chat input box
-        setNewMessage("");
-
-        
-        
-        const session = retrieveValue(currentContactId[0]);
-
-        function retrieveValue(key){
-            var value = "";
-            for(var obj in props.session) {
-            for(var item in props.session[obj]) {
-                if(item === key) {
-                    value = props.session[obj][item];
-                    break;
-                }
-            }
-            }
-            return value;
-        }
-        sendMessage(session, translatedMessage);
-    }
-
-
-
-    return (
-        <div className="chatroom">
-                <h3>Translate - ({languageTranslate.map(lang => {if(lang.contactId === currentContactId[0])return lang.lang})}) {getKeyByValue(languageOptions)}</h3>
-                <ul className="chats" ref={messageEl}>
-                {
-                        // iterate over the Chats, and only display the messages for the currently active chat session
-                        Chats.map(chat => {
-                            if(chat.contactId === currentContactId[0])
-                                return<Message chat={chat} user={agentUsername} />
-                            }
-                        )
-                    }
-                </ul>
-                <form className="input" onSubmit={handleSubmit} >
-                    <input
-                          ref={input}
-                          maxLength = "1024"
-                          type="text"
-                          value={newMessage}
-                          onChange={e => setNewMessage(e.target.value)}
-                        />
-                    <input type="submit" value="Submit" />
-                </form>
- 
-            </div>
+    // Translate agent message EN -> customer language
+    const translatedMessageAPI = await translateTextAPI(
+      newMessage,
+      'en',
+      targetLangCode
     );
-};
+    const translatedMessage = translatedMessageAPI.TranslatedText;
 
+    console.log(
+      ` Original Message: ${newMessage}\n Translated Message: ${translatedMessage}`
+    );
+
+    // add to global chat store for UI
+    const chatRecord = {
+      contactId: currentContactId,
+      username: agentUsername,
+      content: <p>{newMessage}</p>,
+      translatedMessage: <p>{translatedMessage}</p>
+    };
+    addChat((prevMsg) => [...prevMsg, chatRecord]);
+    setNewMessage('');
+
+    // send translated text back into Connect chat
+    const session = getSessionForContact(currentContactId);
+    await sendMessage(session, translatedMessage);
+  }
+
+  // ---------- render ----------
+  return (
+    <div className="chatroom">
+      <h3>{headerLabel}</h3>
+
+      <ul className="chats" ref={messageEl}>
+        {Chats.map((chat, idx) =>
+          chat.contactId === currentContactId ? (
+            <Message key={idx} chat={chat} user={agentUsername} />
+          ) : null
+        )}
+      </ul>
+
+      <form className="input" onSubmit={handleSubmit}>
+        <input
+          ref={input}
+          maxLength="1024"
+          type="text"
+          value={newMessage}
+          onChange={(e) => setNewMessage(e.target.value)}
+          placeholder={
+            targetLangCode
+              ? `Type your message to translate to ${targetLangLabel || targetLangCode}…`
+              : 'Waiting for customer language…'
+          }
+        />
+        <input type="submit" value="Submit" />
+      </form>
+    </div>
+  );
+};
 
 export default Chatroom;
