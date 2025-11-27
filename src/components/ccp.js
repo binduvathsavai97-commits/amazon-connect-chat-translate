@@ -101,10 +101,17 @@ const Ccp = () => {
     }
 
     // If not known, detect it
-    if (localLanguageTranslate.length === 0 || textLang === '') {
-      let tempLang = await detectText(content);
+    // if (localLanguageTranslate.length === 0 || textLang === '') {
+    //   let tempLang = await detectText(content);
+    //   textLang = tempLang.textInterpretation.language;
+    // }
+
+    // If not known, detect it
+    if (!textLang) {
+      const tempLang = await detectText(content);
       textLang = tempLang.textInterpretation.language;
     }
+
 
     // Upsert helper
     function upsert(array, item) {
