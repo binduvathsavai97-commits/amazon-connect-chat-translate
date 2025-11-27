@@ -485,11 +485,10 @@ const Ccp = () => {
                 }))
               }
             />{' '}
-            Suspend customer
+            Flag This Contact
           </label>
 
           <select
-            disabled={!customerInfo.isSuspended}
             value={customerInfo.suspendMinutes || ''}
             onChange={(e) =>
               setCustomerInfo((ci) => ({
